@@ -61,11 +61,11 @@ The simplest approach the one could use would be create a couple of keyboard sho
 `gsettings set org.gnome.desktop.interface text-scaling-factor N`
 where `N` is a number meaning "scale font Nx times".
 
-That will work, but... I don't know about you, but I, as a piece of biomass, was created to do something meaningful, like spending a few days to deliver this solution and not wasting those precious miliseconds on pressing stupid buttons every time.
+That will work, but... I don't know about you, but I, as a piece of biomass, was created to do something meaningful, like spending a few days to deliver this solution and not wasting those precious milliseconds on pressing stupid buttons every time.
 
 ### Automate or die
 
-Some theory. To see connected monitors and their resolutions you could utilize `xrandr`, `wlr-randr` or similar tools. I dodn't want to rely on third party, so let's go directly with _drm_:
+Some theory. To see connected monitors and their resolutions you could utilize `xrandr`, `wlr-randr` or similar tools. I don't want to rely on third party, so let's go directly with _drm_:
 
 ```bash 
 # gives you available resolutions for a specific device
@@ -173,12 +173,12 @@ and link it to udev rules dir
 - We used "==" and "+=" operators in the rule. That line basically tells udev - once conditions (sybsystem, kernel) are met, please run my script.
 - Unlike other services udev doesn't work with the user space config, so you have to use privileged user.
 
-Now test. Plug / unplug the cable and it works... kind of. 
-In my tests in scaled the font down on plug in and scled up on unplug, which is completely opposite of what I want. 
+Now test. Plug / unplug the cable and it works, almost. 
+In my tests the font scaled down on plug in and scaled up on unplug, which is completely opposite of what I want. 
 
 Why? IDK. Looks like order of execution is _plug in -> event fired -> drm modes updated_, meaning when our script executed the state of modes is not updated yet.
 Two potential solutions comes to mind:
-- Inverse scale factor values in the script and don't tell anyone, never. Would work if that weird udev behavior would be consitent, but it's not, plus going this way will hunt you down in nightmares.
+- Inverse scale factor values in the script and don't tell anyone, never. Would work if that weird udev behavior would be consistent, but it's not, plus going this way will hunt you down in nightmares.
 - Put something like `sleep 3` in the script, basically wait for modes to be updated and then apply our logic. Bat idea also, since udev rule is a bad place for "long" running processes, they will be killed. (I'll find a link that describes it and add it here)
 
 #### Desperate already? No pain, no gain.
@@ -220,9 +220,9 @@ ACTION=="change", SUBSYSTEM=="drm", KERNEL=="card[0-9]*", ENV{HOTPLUG}=="1", TAG
 - The udev rule slightly:
   - Added more explicit conditions, like `ACTION=="change"`, AFAIK udev triggers only "change" event on monitor connection, so the solution should work without this condition, but better to be explicit then to through this again if something changes.
     Env var `HOTPLUG` is another condition for the same reasons  
-  -Also as [the docs say][0] systemd expects a rule to be tagged with a `systemd` tag and the service name provided as `SYSTEMD_WANTS` 
+  - Also as [the docs say][0] systemd expects a rule to be tagged with a `systemd` tag and the service name provided as `SYSTEMD_WANTS` 
 Very cool and I like those smart hooks and events, looks very clean and unified. Let's test it.  
-Ta-daaam!  
+Ta-dam!  
 Nothing. Several attempts. Restart deamons, the system itself. Not a thing!  
 
 At this point I feel like this guy
@@ -261,7 +261,7 @@ ExecStart=/path/to/on-external-display-connection.sh
 
 **Key moments**
 - "@" at the end of the name
-- `Type=oneshot` instead of "simple", there is slight difference- Lack of [Install] section. At this point we don't really need it, since systemd service will be invoked by udev directly, I think it's called "static" service in their terminology, but I could be mistaked. We likely will need "install" section as you see later.
+- `Type=oneshot` instead of "simple", there is slight difference- Lack of [Install] section. At this point we don't really need it, since systemd service will be invoked by udev directly, I think it's called "static" service in their terminology, but I could be mistaken. We likely will need "install" section as you see later.
 
 
 `on-external-display-connection.sh` is the same 
@@ -288,11 +288,11 @@ logger "$0 system UI font scaling factor was set to $SCALE_FACTOR"
 
 ```
 
-All the files linked to apropriate places as described above.
+All the files linked to appropriate places as described above.
 
 Test it. Plug / unplug.
 I'm gonna cry now, my beautiful baby... it said "daddy" 🤪  
-Old gods, such a relief, I was able to kill those disgusting seconds I'd have to spend on doing this manually 😂.
+Old gods, such a relief! I was able to kill those disgusting seconds I'd have to spend on doing this manually, otherwise 😂.
 
 All the code with automated installation can be found [in this repo](https://github.com/srgpsk/laptop/tree/master/external-display)
 
@@ -305,7 +305,7 @@ TO BE CONTINUED...
 ### Temporary summary
 
 I really like the idea of hooking up into the system processes in this unified way. I wish tho that the documentation would be more explicit and maybe some examples?  
-At this point I devised a plan - I'm going to spend next 10 years on learning C and Linux internals, join the opensource community and fix that SEQNUM behavior. Oh, that sweet revenge.
+At this point I devised a plan - I'm going to spend next 10 years on learning C and Linux internals, join the open source community and fix that SEQNUM behavior. Oh, that sweet revenge.
 
 
 ## Notes to future me:
