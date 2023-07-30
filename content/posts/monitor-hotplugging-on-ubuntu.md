@@ -12,9 +12,8 @@ hidemeta: false
 comments: false
 description: "Showing a cost of following the \"learning by doing\" approach."
 #canonicalURL: "https://canonical.url/to/page"
-disableHLJS: true # to disable highlightjs
+disableHLJS: false # to disable highlightjs
 disableShare: false
-disableHLJS: false
 hideSummary: false
 searchHidden: true
 ShowReadingTime: true
@@ -341,4 +340,5 @@ systemctl list-units --type target
 [systemd.unit][2]  
 [systemd.device][3]  
 [systemd.service][4]  
-[HOTPLUG and SEQNUM][5]  
+[HOTPLUG and SEQNUM][5] 
+
