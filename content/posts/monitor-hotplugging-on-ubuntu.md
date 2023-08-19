@@ -44,7 +44,7 @@ editPost:
 
 ## TL;DR 
 
-[Jump to the solution](#we-dont-quit-we-never-quit-again-again)
+[Jump to the solution](#solution)
 
 ## The reason
 
@@ -158,7 +158,7 @@ CURRENT_TAGS= ...
 ```
 
 The important parts of that list are action, subsystem, hotplug and, as you'll see later, seqnum.
-Let's write a udev rule `on-external-display-connection.rules` as described (here)[1] and (there)[2]
+Let's write a udev rule `on-external-display-connection.rules` as described [here][1] and [there][2]
 
 ```
 SUBSYSTEM=="drm", KERNEL=="card[0-9]*", RUN+="/path/to/on-external-display-connection.sh"
@@ -183,7 +183,7 @@ Two potential solutions comes to mind:
 
 #### Desperate already? No pain, no gain.
 
-Remember you still can [jump to the solution](#we-dont-quit-we-never-quit-again-again)
+Remember you still can [jump to the solution](#solution)
 
 
 Moving forward. It's time to introduce a `systemd` service.
@@ -307,26 +307,74 @@ TO BE CONTINUED...
 I really like the idea of hooking up into the system processes in this unified way. I wish tho that the documentation would be more explicit and maybe some examples?  
 At this point I devised a plan - I'm going to spend next 10 years on learning C and Linux internals, join the open source community and fix that SEQNUM behavior. Oh, that sweet revenge.
 
+![Many hours later](/img/many-hours-later.avif)
 
-## Notes to future me:
+### When theoretical physics meets practice
 
-- Service needs "install" section now. Graphical session target looks like a good point to hook up for this
+Did you know that we're actually not touching anything, since that electron repulsion force prevents atoms from touching each other?  
+So feel free to hit that wall with your face as many times as you want, the pain is only in your imagination.
+
+After first phase of implementation only 2 problems left:
+
+1. Udev based logic stops working after reboot  
+2. If laptop rebooted and HDMI connected before the user login - the logic is not executed.
+
+First problem drove me crazy for a while, but solution was very easy. I used a symlink for udev rule file, but I shouldn't, so copying the rules file to `/etc/udev/rules.d` solved the problem.  
+I've seen "signs" about it during the journey - a Github issue that seemed resolved, no symlinks in `rules.d`, but I chose to ignore it because symlinks felt better (and I hope eventually they will work).
+
+Second problem was another pain in the bottoms.  
+We use a "systemd service template" (see SEQNUM / HOTPLUG problem above) like `external-display@.service` with a simple content
+```
+[Unit]
+Description=Scale UI on external display connection
+
+[Service]
+Type=oneshot
+ExecStart=/path/to/on-external-display-connection.sh
+```
+
+to be invoked by udev event/rule, no [Install] section needed. And udev invokes it by passing SEQNUM like  `external-display@4587.service` which makes that service unique, which is expected by hotplug. That works well, but on system boot you don't have udev event, at least when an external display is already plugged in.  
+The most confusing part is that "systemd service template" can't be enabled as a regular service so systemd could consider it active, but it can be _started_ using glob (__\*__) operator like `systemctl start --all external-display@*.service`. But if you replace _start_ with _enable_ it will do an interesting thing but without desired outcome.  
+After hitting a wall for a while I found myself very dumb and like "why trying to enable a template if you could use another service?". And sure it works, added 
 ```
 [Install]
-WantedBy=graphical-session.target
+WantedBy=graphical.target
 ```
-But it doesn't seem like systemd even running the service, syslog is empty. Also check the docs for `[Unit]` Requires= and After=, maybe something is in there.
-- Likely it has something to do with how the service runs. Now we're using "system bus with the user privileges", that `User=` in the service. Plus passing "user bus" in the scaling script. Looks messy.
-- Try to move everything to user space `systemctl --user ...` etc., unified. `systemctl` has environment load command where we can specify what env vars we need from the user. We may need Xuathority, Dbus and likely Display.
-- See targets available for system and real user:
-```
-# same for devices and services
-systemctl --user list-units --type target
-systemctl list-units --type target
-```
-- [Here's](https://unix.stackexchange.com/questions/693485/after-multi-user-target-and-others-not-working-in-a-systemd-service) a good discussion and visuals for targets
-- [Here](https://superuser.com/a/1720018/507470) the guy says he mas able to run the service on graphical session target
-- Check the grammar, neovim has some lsps for that.
+
+section to the service above, made a copy of it as a normal service under `/etc/systemd/system/external-display-on-boot.service` (no @ in the name) and enabled it with `sudo systemctl enable external-display-on-boot` and TA-DAA on reboot it started executing the logic.  
+Well, executing doesn't mean it's working, LOL, you wanted to escape from the hell so easy? No, no, stay with me.  
+On reboot you'll see that logic is not applied, but `journalctl -xeu external-display-on-boot.service` shows that service actually was called and there's intersting error:
+![drm modes not populated yet](/img/systemd-service-on-boot-display.avif)
+
+Basically it tells us that the dir we are reading display resolutions from doesn't exist. Nonsense, right? Well, not really.  
+Notice that we use `WantedBy=graphical.target` for the service run target and during the jorney we learned that there are 2 sets of targets - system and user ones.  
+By comparing output of `systemctl list-units --type target` and `systemctl list-units --user --type target` we can see there's another target on the user side `graphical-session.target`.  
+And I've already tried to use it before, but without all the context/knowledge I build in my head now - it failed like a magic and I was desperate since I wasn't able to google anything useful.  
+Example:
+> $> systemctl enable --user external-display.service  
+> Created symlink /home/your_user/.config/systemd/user/multi-user.target.wants/external-display.service → /home/your_user/.config/systemd/user/external-display.service.  
+> Unit /home/dev/.config/systemd/user/external-display.service is added as a dependency to a non-existent unit multi-user.target.
+
+Long story short:
+
+- Seems like "modes" populated only on user login (I guess it makes sense considering we're working with user-side device)
+- Seems like we need to use `graphical-session.target` user target, meaning we have to move all the systemd services on the user side and work with them by passing `--user` param like `systemctl --user ...`
+- Then we do not need `User=` in `[Service]` section of the service (it's already removed in the example above since I copy-pasted the code from working solution)
+- We know that UDEV rule has 2 systemd related tags `SYSTEMD_WANTS` and `SYSTEMD_USER_WANTS`, so we ned to change it to use the latter one
+- `systemctl --user` works with `~/.config/systemd/user` dir, but if you utilize systemd built-in commands like `systemctl --user link SERVICE`, `enable` etc. all the files will be placed automatically.
+- I had some problems with running automation script as `sudo` which is needed because, unlike `systemd`, `udev` rules need root access. So `sudo systemctl --user ...` throws an error but gives you a solution right away `sudo systemctl --machine=YOUR_USER@.host --user ...`.
+- You do not need to use any Xauthority or DISPLAY as you see in other implementations, well at least you won't need them for this task. Note to myself: Xauthority doesn't live in the user home dir anymore, there is a command (google it) to get that file, since its name generated dynamically. 
+
+Applying all that knowledge I was able to build a working solution. Real TA-DAA here, no excuses.
+
+## Solution
+
+All the code is [in the this repo](https://github.com/srgpsk/laptop/tree/master/external-display), you can use automation by calling `setup.sh` or check only `systemd` and `udev` dirs.
+
+## Summary
+
+Well, I still like it.   
+As a software developer you feel this pain every day and you get use to it. On the other side I'm not DevOps, so unlikely I'd be able to monetize it.    
 
 ## Additional reads
 [0]: https://www.freedesktop.org/software/systemd/man/udev.html
@@ -340,5 +388,12 @@ systemctl list-units --type target
 [systemd.unit][2]  
 [systemd.device][3]  
 [systemd.service][4]  
-[HOTPLUG and SEQNUM][5] 
+[HOTPLUG and SEQNUM][5]   
+[Here's](https://unix.stackexchange.com/questions/693485/after-multi-user-target-and-others-not-working-in-a-systemd-service) a good discussion and visuals for targets  
+[Here](https://superuser.com/a/1720018/507470) the guy says he mas able to run the service on graphical session target  
+[RedHat's guide](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/configuring_basic_system_settings/index) not only about systemd, I'd need to read through most of the sections, looks useful.
+[Hotplugging with UDEV](https://bootlin.com/doc/legacy/udev/udev.pdf) seems like it has explanations about udev internals. Nice, another read-it-later thing.
 
+TODO:
+
+- Check the grammar, neovim has some lsps for that.
