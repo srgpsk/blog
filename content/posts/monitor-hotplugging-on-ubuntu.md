@@ -307,7 +307,7 @@ TO BE CONTINUED...
 I really like the idea of hooking up into the system processes in this unified way. I wish tho that the documentation would be more explicit and maybe some examples?  
 At this point I devised a plan - I'm going to spend next 10 years on learning C and Linux internals, join the open source community and fix that SEQNUM behavior. Oh, that sweet revenge.
 
-![Many hours later](/img/many-hours-later.avif)
+{{< img "Many hours later" "img/many-hours-later.avif" >}}
 
 ### When theoretical physics meets practice
 
@@ -344,7 +344,7 @@ WantedBy=graphical.target
 section to the service above, made a copy of it as a normal service under `/etc/systemd/system/external-display-on-boot.service` (no @ in the name) and enabled it with `sudo systemctl enable external-display-on-boot` and TA-DAA on reboot it started executing the logic.  
 Well, executing doesn't mean it's working, LOL, you wanted to escape from the hell so easy? No, no, stay with me.  
 On reboot you'll see that logic is not applied, but `journalctl -xeu external-display-on-boot.service` shows that service actually was called and there's intersting error:
-![drm modes not populated yet](/img/systemd-service-on-boot-display.avif)
+{{< img "drm modes not populated yet" "/img/systemd-service-on-boot-display.avif" >}}
 
 Basically it tells us that the dir we are reading display resolutions from doesn't exist. Nonsense, right? Well, not really.  
 Notice that we use `WantedBy=graphical.target` for the service run target and during the jorney we learned that there are 2 sets of targets - system and user ones.  
